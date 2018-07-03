@@ -52,6 +52,214 @@ static void print_headers(FILE *fp, char *label, struct rtnl_ctrl_data *ctrl)
 		fprintf(fp, "%s", label);
 }
 
+static int print_routenotify(struct nlmsghdr *n, void *arg)
+{
+	FILE *fp = (FILE *)arg;
+	struct rtmsg *r = NLMSG_DATA(n);
+	int len = n->nlmsg_len;
+	struct rtattr *rta_tb[RTA_MAX+1];
+	int family, color;
+
+	SPRINT_BUF(b1);
+
+	if (n->nlmsg_type != RTM_NOTIFYROUTE)
+		return 0;
+
+	len -= NLMSG_LENGTH(sizeof(*r));
+	if (len < 0) {
+		fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
+		return -1;
+	}
+
+	parse_rtattr(rta_tb, RTA_MAX, RTM_RTA(r), len);
+
+	color = COLOR_NONE;
+	if (rta_tb[RTA_DST]) {
+		family = get_real_family(r->rtm_type, r->rtm_family);
+		color = ifa_family_color(family);
+
+		format_host_rta_r(family, rta_tb[RTA_DST], b1, sizeof(b1));
+
+		print_color_string(PRINT_ANY, color, "dst", "%s ", b1);
+	}
+
+	if (rta_tb[RTA_SRC]) {
+		family = get_real_family(r->rtm_type, r->rtm_family);
+		color = ifa_family_color(family);
+
+		format_host_rta_r(family, rta_tb[RTA_SRC], b1, sizeof(b1));
+
+		print_color_string(PRINT_ANY, color, "src", "%s ", b1);
+	}
+#if 0
+
+	ifa_flags = get_ifa_flags(ifa, rta_tb[IFA_FLAGS]);
+
+	if (!rta_tb[IFA_LOCAL])
+		rta_tb[IFA_LOCAL] = rta_tb[IFA_ADDRESS];
+	if (!rta_tb[IFA_ADDRESS])
+		rta_tb[IFA_ADDRESS] = rta_tb[IFA_LOCAL];
+
+	if (filter.ifindex && filter.ifindex != ifa->ifa_index)
+		return 0;
+	if ((filter.scope^ifa->ifa_scope)&filter.scopemask)
+		return 0;
+	if ((filter.flags ^ ifa_flags) & filter.flagmask)
+		return 0;
+
+	if (filter.family && filter.family != ifa->ifa_family)
+		return 0;
+
+	if (ifa_label_match_rta(ifa->ifa_index, rta_tb[IFA_LABEL]))
+		return 0;
+
+	if (inet_addr_match_rta(&filter.pfx, rta_tb[IFA_LOCAL]))
+		return 0;
+
+	if (filter.flushb) {
+		struct nlmsghdr *fn;
+
+		if (NLMSG_ALIGN(filter.flushp) + n->nlmsg_len > filter.flushe) {
+			if (flush_update())
+				return -1;
+		}
+		fn = (struct nlmsghdr *)(filter.flushb + NLMSG_ALIGN(filter.flushp));
+		memcpy(fn, n, n->nlmsg_len);
+		fn->nlmsg_type = RTM_DELADDR;
+		fn->nlmsg_flags = NLM_F_REQUEST;
+		fn->nlmsg_seq = ++rth.seq;
+		filter.flushp = (((char *)fn) + n->nlmsg_len) - filter.flushb;
+		filter.flushed++;
+		if (show_stats < 2)
+			return 0;
+	}
+
+	if (n->nlmsg_type == RTM_DELADDR)
+		print_bool(PRINT_ANY, "deleted", "Deleted ", true);
+
+	if (!brief) {
+		const char *name;
+
+		if (filter.oneline || filter.flushb) {
+			const char *dev = ll_index_to_name(ifa->ifa_index);
+
+			if (is_json_context()) {
+				print_int(PRINT_JSON,
+					  "index", NULL, ifa->ifa_index);
+				print_string(PRINT_JSON, "dev", NULL, dev);
+			} else {
+				fprintf(fp, "%u: %s", ifa->ifa_index, dev);
+			}
+		}
+
+		name = family_name(ifa->ifa_family);
+		if (*name != '?') {
+			print_string(PRINT_ANY, "family", "    %s ", name);
+		} else {
+			print_int(PRINT_ANY, "family_index", "    family %d ",
+				  ifa->ifa_family);
+		}
+	}
+
+	if (rta_tb[IFA_LOCAL]) {
+		print_color_string(PRINT_ANY,
+				   ifa_family_color(ifa->ifa_family),
+				   "local", "%s",
+				   format_host_rta(ifa->ifa_family,
+						   rta_tb[IFA_LOCAL]));
+		if (rta_tb[IFA_ADDRESS] &&
+		    memcmp(RTA_DATA(rta_tb[IFA_ADDRESS]),
+			   RTA_DATA(rta_tb[IFA_LOCAL]),
+			   ifa->ifa_family == AF_INET ? 4 : 16)) {
+			print_string(PRINT_FP, NULL, " %s ", "peer");
+			print_color_string(PRINT_ANY,
+					   ifa_family_color(ifa->ifa_family),
+					   "address",
+					   "%s",
+					   format_host_rta(ifa->ifa_family,
+							   rta_tb[IFA_ADDRESS]));
+		}
+		print_int(PRINT_ANY, "prefixlen", "/%d ", ifa->ifa_prefixlen);
+	}
+
+	if (brief)
+		goto brief_exit;
+
+	if (rta_tb[IFA_BROADCAST]) {
+		print_string(PRINT_FP, NULL, "%s ", "brd");
+		print_color_string(PRINT_ANY,
+				   ifa_family_color(ifa->ifa_family),
+				   "broadcast",
+				   "%s ",
+				   format_host_rta(ifa->ifa_family,
+						   rta_tb[IFA_BROADCAST]));
+	}
+
+	if (rta_tb[IFA_ANYCAST]) {
+		print_string(PRINT_FP, NULL, "%s ", "any");
+		print_color_string(PRINT_ANY,
+				   ifa_family_color(ifa->ifa_family),
+				   "anycast",
+				   "%s ",
+				   format_host_rta(ifa->ifa_family,
+						   rta_tb[IFA_ANYCAST]));
+	}
+
+	print_string(PRINT_ANY,
+		     "scope",
+		     "scope %s ",
+		     rtnl_rtscope_n2a(ifa->ifa_scope, b1, sizeof(b1)));
+
+	print_ifa_flags(fp, ifa, ifa_flags);
+
+	if (rta_tb[IFA_LABEL])
+		print_string(PRINT_ANY,
+			     "label",
+			     "%s",
+			     rta_getattr_str(rta_tb[IFA_LABEL]));
+
+	if (rta_tb[IFA_CACHEINFO]) {
+		struct ifa_cacheinfo *ci = RTA_DATA(rta_tb[IFA_CACHEINFO]);
+
+		print_string(PRINT_FP, NULL, "%s", _SL_);
+		print_string(PRINT_FP, NULL, "       valid_lft ", NULL);
+
+		if (ci->ifa_valid == INFINITY_LIFE_TIME) {
+			print_uint(PRINT_JSON,
+				   "valid_life_time",
+				   NULL, INFINITY_LIFE_TIME);
+			print_string(PRINT_FP, NULL, "%s", "forever");
+		} else {
+			print_uint(PRINT_ANY,
+				   "valid_life_time", "%usec", ci->ifa_valid);
+		}
+
+		print_string(PRINT_FP, NULL, " preferred_lft ", NULL);
+		if (ci->ifa_prefered == INFINITY_LIFE_TIME) {
+			print_uint(PRINT_JSON,
+				   "preferred_life_time",
+				   NULL, INFINITY_LIFE_TIME);
+			print_string(PRINT_FP, NULL, "%s", "forever");
+		} else {
+			if (ifa_flags & IFA_F_DEPRECATED)
+				print_int(PRINT_ANY,
+					  "preferred_life_time",
+					  "%dsec",
+					  ci->ifa_prefered);
+			else
+				print_uint(PRINT_ANY,
+					   "preferred_life_time",
+					   "%usec",
+					   ci->ifa_prefered);
+		}
+	}
+#endif
+	print_string(PRINT_FP, NULL, "%s", "\n");
+brief_exit:
+	fflush(fp);
+	return 0;
+}
+
 static int accept_msg(struct rtnl_ctrl_data *ctrl,
 		      struct nlmsghdr *n, void *arg)
 {
@@ -143,6 +351,11 @@ static int accept_msg(struct rtnl_ctrl_data *ctrl,
 		print_nsid(n, arg);
 		return 0;
 
+	case RTM_NOTIFYROUTE:
+		print_headers(fp, "[NOTIFYROUTE]", ctrl);
+		print_routenotify(n, arg);
+		return 0;
+
 	case NLMSG_ERROR:
 	case NLMSG_NOOP:
 	case NLMSG_DONE:
@@ -155,6 +368,7 @@ static int accept_msg(struct rtnl_ctrl_data *ctrl,
 			n->nlmsg_flags, n->nlmsg_flags, n->nlmsg_len,
 			n->nlmsg_len);
 	}
+
 	return 0;
 }
 
@@ -172,6 +386,7 @@ int do_ipmonitor(int argc, char **argv)
 	int lrule = 0;
 	int lnsid = 0;
 	int ifindex = 0;
+	int lrtnotify = 0;
 
 	groups |= nl_mgrp(RTNLGRP_LINK);
 	groups |= nl_mgrp(RTNLGRP_IPV4_IFADDR);
@@ -189,6 +404,7 @@ int do_ipmonitor(int argc, char **argv)
 	groups |= nl_mgrp(RTNLGRP_IPV6_RULE);
 	groups |= nl_mgrp(RTNLGRP_NSID);
 	groups |= nl_mgrp(RTNLGRP_MPLS_NETCONF);
+	groups |= nl_mgrp(RTNLGRP_ROUTE_NOTIFY);
 
 	rtnl_close(&rth);
 
@@ -224,6 +440,9 @@ int do_ipmonitor(int argc, char **argv)
 			groups = 0;
 		} else if (matches(*argv, "nsid") == 0) {
 			lnsid = 1;
+			groups = 0;
+		} else if (matches(*argv, "routenotify") == 0) {
+			lrtnotify = 1;
 			groups = 0;
 		} else if (strcmp(*argv, "all") == 0) {
 			prefix_banner = 1;
@@ -295,6 +514,9 @@ int do_ipmonitor(int argc, char **argv)
 	}
 	if (lnsid) {
 		groups |= nl_mgrp(RTNLGRP_NSID);
+	}
+	if (lrtnotify) {
+		groups |= nl_mgrp(RTNLGRP_ROUTE_NOTIFY);
 	}
 	if (file) {
 		FILE *fp;
