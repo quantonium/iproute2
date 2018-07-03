@@ -360,6 +360,12 @@ static void print_encap_ila(FILE *fp, struct rtattr *encap)
 		print_string(PRINT_ANY, "hook_type",
 			     " hook-type %s ",
 			     ila_hook_type2name(rta_getattr_u8(tb[ILA_ATTR_HOOK_TYPE])));
+
+	if (tb[ILA_ATTR_NOTIFY_SRC])
+		print_null(PRINT_ANY, "notify-src", " notify-src ", "");
+
+	if (tb[ILA_ATTR_NOTIFY_DST])
+		print_null(PRINT_ANY, "notify-dst", " notify-dst ", "");
 }
 
 static void print_encap_ip6(FILE *fp, struct rtattr *encap)
@@ -945,6 +951,12 @@ static int parse_encap_ila(struct rtattr *rta, size_t len,
 					   (__u8)hook_type);
 
 			argc--; argv++;
+		} else if (strcmp(*argv, "notify-src") == 0) {
+			NEXT_ARG();
+			rta_addattr_l(rta, 1024, ILA_ATTR_NOTIFY_SRC, NULL, 0);
+		} else if (strcmp(*argv, "notify-dst") == 0) {
+			NEXT_ARG();
+			rta_addattr_l(rta, 1024, ILA_ATTR_NOTIFY_DST, NULL, 0);
 		} else {
 			break;
 		}
