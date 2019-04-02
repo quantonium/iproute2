@@ -73,6 +73,7 @@ int do_xfrm(int argc, char **argv);
 int do_ipl2tp(int argc, char **argv);
 int do_ipfou(int argc, char **argv);
 int do_ipila(int argc, char **argv);
+int do_ip6tlv(int argc, char **argv);
 int do_tcp_metrics(int argc, char **argv);
 int do_ipnetconf(int argc, char **argv);
 int do_iptoken(int argc, char **argv);

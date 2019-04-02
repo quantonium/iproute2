@@ -297,4 +297,54 @@ struct in6_flowlabel_req {
  * ...
  * MRT6_MAX
  */
+
+/* NETLINK_GENERIC related info for IPv6 TLVs */
+
+#define IPV6_TLV_GENL_NAME	"ipv6-tlv"
+#define IPV6_TLV_GENL_VERSION	0x1
+
+enum {
+	IPV6_TLV_ATTR_UNSPEC,
+	IPV6_TLV_ATTR_TYPE,			/* u8, > 1 */
+	IPV6_TLV_ATTR_ORDER,			/* u8 */
+	IPV6_TLV_ATTR_ADMIN_PERM,		/* u8, perm value */
+	IPV6_TLV_ATTR_USER_PERM,		/* u8  perm value */
+	IPV6_TLV_ATTR_CLASS,			/* u8, 3 bit flags */
+	IPV6_TLV_ATTR_ALIGN_MULT,		/* u8, 1 to 16 */
+	IPV6_TLV_ATTR_ALIGN_OFF,		/* u8, 0 to 15 */
+	IPV6_TLV_ATTR_MIN_LEN,			/* u8 (option data length) */
+	IPV6_TLV_ATTR_MAX_LEN,			/* u8 (option data length) */
+	IPV6_TLV_ATTR_LEN_MULT,			/* u8, 1 to 16 */
+	IPV6_TLV_ATTR_LEN_OFF,			/* u8, 0 to 15 */
+
+	__IPV6_TLV_ATTR_MAX,
+};
+
+#define IPV6_TLV_ATTR_MAX		(__IPV6_TLV_ATTR_MAX - 1)
+
+enum {
+	IPV6_TLV_CMD_SET,
+	IPV6_TLV_CMD_UNSET,
+	IPV6_TLV_CMD_GET,
+
+	__IPV6_TLV_CMD_MAX,
+};
+
+/* Permissions values */
+enum {
+	IPV6_TLV_PERM_NONE,
+	IPV6_TLV_PERM_WITH_CHECK,
+	IPV6_TLV_PERM_NO_CHECK,
+	IPV6_TLV_PERM_MAX = IPV6_TLV_PERM_NO_CHECK
+};
+
+/* Flags for class */
+#define IPV6_TLV_CLASS_FLAG_HOPOPT      0x1
+#define IPV6_TLV_CLASS_FLAG_RTRDSTOPT   0x2
+#define IPV6_TLV_CLASS_FLAG_DSTOPT      0x4
+#define IPV6_TLV_CLASS_MAX		7
+
+#define IPV6_TLV_CLASS_ANY_DSTOPT	(IPV6_TLV_CLASS_FLAG_RTRDSTOPT | \
+					 IPV6_TLV_CLASS_FLAG_DSTOPT)
+
 #endif /* _LINUX_IN6_H */
